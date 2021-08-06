@@ -42,6 +42,7 @@ def main():
     config = configparser.ConfigParser()
     config.read('config.cfg')
     download_folder = config['DEFAULT']['DownloadFolder']
+    parallel = config['DEFAULT'].getboolean('ParallelDownloads')
     if not download_folder:
         logger.error('Need to set download folder in config.cfg!')
         raise ValueError('Need to set download folder in config.cfg!')
@@ -67,22 +68,26 @@ def main():
     for dct in scheduleDict:
         if dct['name'] in pickedNames:
             res.append(dct)
-    errors = downloader(res, download_folder)
+    errors = downloader(res, download_folder, parallel=parallel)
 
 
     if errors:
         raise RuntimeError('Encountered partial errors while running. Please consult the logs.')
 
 
-def downloader(res, download_folder):
-    mp.Pool()
-
-    #TODO try parallel download, then serial for the failures
+def downloader(res, download_folder, parallel=False):
     download_errors = []
-    for dct in res:
-        download_res = _download_child(dct, download_folder)
-        if download_res is not None:
-            download_errors.append(download_res)
+    if parallel:
+        logger.warning("Using parallel downloads. If any errors occur, they'll be harder to debug.")
+        logger.warning("This setting can be turned off in config.cfg")
+        ncount = min(mp.cpu_count(), len(res))
+        with mp.Pool(processes=ncount) as pool:
+            download_errors = set(pool.starmap(_download_child, [(dct, download_folder) for dct in res])) - {None}
+    else:
+        for dct in res:
+            download_res = _download_child(dct, download_folder)
+            if download_res is not None:
+                download_errors.append(download_res)
 
     logger.info('Downloaded %d/%d files', len(res)-len(download_errors), len(res))
 
@@ -113,7 +118,7 @@ def _download_child(dct, download_folder):
             else:
                 print(line)
     if not proc.returncode:
-        logger.info('done')
+        logger.info('Finished %s', dct['name'])
     else:
         stdout, stderr = proc.communicate()
         logger.error('Encountered error as follows')
