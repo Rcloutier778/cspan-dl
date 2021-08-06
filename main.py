@@ -2,8 +2,8 @@ import requests
 import multiprocessing as mp
 import subprocess
 import datetime
-
-from configs import *
+import configparser
+from lib import *
 from gui import seriesPickerMain, datePicker, downloadPckerMain
 import time
 from bs4 import BeautifulSoup, Doctype
@@ -39,37 +39,64 @@ logger = logging.getLogger(__name__)
 # Need C:\ffmpeg\bin in PATH
 
 def main():
-    if DOWNLOAD_FOLDER is None:
-        logger.error('Need to set download folder in config.py!')
-        raise ValueError('Need to set download folder in config.py!')
-    if not os.path.exists(DOWNLOAD_FOLDER):
-        os.mkdir(DOWNLOAD_FOLDER)
-    logger.info('Downloading all files to %s' % DOWNLOAD_FOLDER)
+    config = configparser.ConfigParser()
+    config.read('config.cfg')
+    download_folder = config['DEFAULT']['DownloadFolder']
+    if not download_folder:
+        logger.error('Need to set download folder in config.cfg!')
+        raise ValueError('Need to set download folder in config.cfg!')
+    if not os.path.exists(download_folder):
+        os.mkdir(download_folder)
+    logger.info('Downloading all files to %s' % download_folder)
     logger.info("You can change the download location in configs.py")
     series = seriesPickerMain()
+    if not series:
+        print("Goodbye!")
+        return
     date_selected = datePicker()
+    if not date_selected:
+        print('Goodbye!')
+        return
     scheduleDict = getSchedule(series, date_selected)
     pickedNames = downloadPckerMain(scheduleDict)
+    if not pickedNames:
+        logger.info('No shows picked, exiting...')
+        return
+
     res = [] #pruned dict
     for dct in scheduleDict:
         if dct['name'] in pickedNames:
             res.append(dct)
-    downloader(res)
-    logger.info('Done')
+    errors = downloader(res, download_folder)
 
-    return
 
-def downloader(res):
+    if errors:
+        raise RuntimeError('Encountered partial errors while running. Please consult the logs.')
 
+
+def downloader(res, download_folder):
+    mp.Pool()
+
+    #TODO try parallel download, then serial for the failures
+    download_errors = []
     for dct in res:
-        _download_child(dct)
+        download_res = _download_child(dct, download_folder)
+        if download_res is not None:
+            download_errors.append(download_res)
 
+    logger.info('Downloaded %d/%d files', len(res)-len(download_errors), len(res))
+
+    if download_errors:
+        logger.info('Encountered errors while downloading the following:')
+        logger.info('\n'.join(download_errors))
+        logger.info('Check the log file for stderr')
+    return len(download_errors)
         
-def _download_child(dct):
+def _download_child(dct, download_folder):
     logger.info('downloading %s via %s', dct['name'], dct['url'])
     dir_path = os.path.dirname(os.path.realpath(__file__))
     filepath = os.path.join(dir_path, 'youtube-dl.exe')
-    download_folder = os.path.join(DOWNLOAD_FOLDER, '%(title)s-%(id)s.%(ext)s')
+    download_folder = os.path.join(download_folder, '%(title)s-%(id)s.%(ext)s')
     cmd = [filepath, dct['url'], '--output', download_folder]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     while True:
@@ -79,7 +106,12 @@ def _download_child(dct):
         if not line:
             time.sleep(3)
         else:
-            print(line.strip(), end='\r')
+            line = line.strip()
+            if '%' in line:
+                # download percentage
+                print(line, end='\r')
+            else:
+                print(line)
     if not proc.returncode:
         logger.info('done')
     else:
@@ -87,7 +119,7 @@ def _download_child(dct):
         logger.error('Encountered error as follows')
         logger.error('STDOUT: \n%s', stdout)
         logger.error('STDERR: \n%s', stderr)
-
+        return dct['name'], stderr
 
 
 

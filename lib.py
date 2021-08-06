@@ -17,5 +17,3 @@ def getURL(seriesName, **kwargs):
         return SCHEDULE_SHEET.format(**kwargs)
     return SERIES_SHEET.format(series=SERIES_NAME_TO_ID_DICT[seriesName], **kwargs)
 
-# Windows dirs must use r''
-DOWNLOAD_FOLDER = r'C:\Users\Richard\Desktop\youtubedl\videos'

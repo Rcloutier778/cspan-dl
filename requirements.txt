@@ -1,0 +1,4 @@
+tkcalendar~=1.6.1
+requests~=2.26.0
+bs4~=0.0.1
+beautifulsoup4~=4.9.3

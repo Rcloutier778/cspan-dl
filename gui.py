@@ -1,8 +1,7 @@
 import tkinter as tk
 
-
-import requests
-from configs import *
+from lib import *
+from tkcalendar import Calendar, DateEntry
 
 import pprint
 import datetime
@@ -56,7 +55,6 @@ def seriesPickerMain():
     return returnVal
 
 def datePicker():
-    from tkcalendar import Calendar,DateEntry
     root = tk.Tk()
 
     pathVar = tk.StringVar()
@@ -104,7 +102,7 @@ class DownloadPicker(tk.Frame):
                 #bttn.pack()
                 
         self.quit = tk.Button(self.gridFrame, text="SUBMIT", fg="green",
-                              command=self.master.destroy)
+                              command=self.master.destroy, font=('Arial',20))
         self.gridFrame.pack()
         self.abstractFrame.pack(expand=True)
         self.quit.grid(row=0, column=1)
