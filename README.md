@@ -3,8 +3,4 @@ A utility to download cspan videos. Uses youtube-dl to do the actual downloading
 
 Made with love for dad.
 
-Need youtube-dl.exe in the same dir as this
-
-Need ffmpeg installed in C:\ffmpeg
-
-Need C:\ffmpeg\bin in PATH
+Requires youtube-dl, ffmpeg, and python 3.7+ to get started. INSTALL.bat should guide you through the rest.
