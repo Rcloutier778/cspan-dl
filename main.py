@@ -6,6 +6,7 @@ import configparser
 from lib import *
 from gui import GUI
 import time
+import tempfile
 from bs4 import BeautifulSoup, Doctype
 from pprint import pprint, pformat
 import re
@@ -52,12 +53,15 @@ def main():
     logger.info('Downloading all files to %s' % download_folder)
     logger.info("You can change the download location in configs.py")
 
+
     with GUI() as gui:
         series = gui.series
         date_selected = gui.date_selected
         scheduleDict = getSchedule(series, date_selected)
 
         pickedNames = gui.downloadPicker(scheduleDict)
+        save_fmt = gui.fmt
+        keep_mp4 = gui.keep_mp4
 
     if not pickedNames:
         logger.info('No shows picked, exiting...')
@@ -69,9 +73,51 @@ def main():
             res.append(dct)
     errors = downloader(res, download_folder, parallel=parallel)
 
-
     if errors:
-        raise RuntimeError('Encountered partial errors while running. Please consult the logs.')
+        logger.error('Encountered partial errors while running. Please consult the logs.')
+
+    if save_fmt == 'mp4':
+        if errors:
+            raise RuntimeError('Encountered partial errors while running. Please consult the logs.')
+        return
+
+    dvdStyler(pickedNames, config, save_fmt, keep_mp4)
+
+def dvdStyler(names, config, fmt, keep_mp4):
+    assert fmt in ['dvd','iso']
+    logger.info('Converting %s files to %s', len(names), fmt)
+    download_folder = config['DEFAULT']['DownloadFolder']
+    dvd_styler_exe = config['DEFAULT']['DVDStyler']
+
+    paths = [os.path.join(download_folder, f) for f in os.listdir(download_folder) if f.rsplit('.',1)[0] in names]
+
+    mainTempFolder = tempfile.mkdtemp(prefix='DVDStyler_temp_folder')
+
+    errors = []
+    for path in paths:
+        name = path.rsplit(os.sep,1)[1].rsplit('.',1)[0]
+        tempFolder = tempfile.mkdtemp(dir=mainTempFolder, prefix=name[:12])
+        cmd = [dvd_styler_exe, path, '--tempDir', tempFolder, '--start']
+        if fmt == 'dvd':
+            cmd.extend(['--outputDir', os.path.join(download_folder, name+'_dvd')])
+        else:
+            cmd.extend(['--isoFile', os.path.join(download_folder, name+'.iso')])
+
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        while True:
+            if proc.poll() or proc.returncode is not None:
+                break
+        if not proc.returncode:
+            logger.info('Finished %s', name)
+            if not keep_mp4:
+                os.remove(path)
+        else:
+            stdout, stderr = proc.communicate()
+            logger.error('Encountered error as follows')
+            logger.error('STDOUT: \n%s', stdout)
+            logger.error('STDERR: \n%s', stderr)
+            errors.append(name)
+
 
 
 def downloader(res, download_folder, parallel=False):
@@ -100,7 +146,7 @@ def _download_child(dct, download_folder):
     logger.info('downloading %s via %s', dct['name'], dct['url'])
     dir_path = os.path.dirname(os.path.realpath(__file__))
     filepath = os.path.join(dir_path, 'youtube-dl.exe')
-    download_folder = os.path.join(download_folder, '{name}-%(id)s.%(ext)s'.format(name=dct['name']))
+    download_folder = os.path.join(download_folder, '{name}.%(ext)s'.format(name=dct['name']))
     cmd = [filepath, dct['url'], '--output', download_folder]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     while True:
@@ -133,7 +179,7 @@ def getSchedule(series, date):
     logger.info('Using %s to grab the schedule for %s on %s' % (url, series, date,))
     r = requests.get(url)
     assert r.status_code == 200
-    html = BeautifulSoup(r.text, "html.parser" )
+    html = BeautifulSoup(r.text, "html.parser")
 
     html = stripHTML(html)
     

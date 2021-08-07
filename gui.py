@@ -6,6 +6,7 @@ from tkcalendar import Calendar
 import pprint
 import datetime
 import sys
+import functools
 
 FONT = ('Arial', 20)
 
@@ -129,14 +130,98 @@ class DownloadPickerButton(tk.Button):
         else:
             self.config(bg=self.DefClr, relief=tk.RAISED)
 
+
+class SaveMethod(tk.Frame):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.master = master
+        self.pack()
+        self.label = tk.Label(self, text='How would you like to save the files?', font=FONT)
+        self.label.pack(side='top')
+
+        self.selected = None
+
+
+        fmt_to_hint = {
+            'mp4': 'Normal mp4 download',
+            'dvd': 'Save in the same format that appears on the dvd',
+            'iso': 'Same as dvd option, but contained within a .iso file, for later burning'
+        }
+
+
+
+        gridFrame = tk.Frame(self)
+        gridFrame.pack()
+
+
+        fmt_to_bttn = {}
+
+        def bttn_action(fmt):
+            def bttn_action_wrapper(*args, **kwargs):
+                self.selected = fmt
+                for bttn in fmt_to_bttn.values():
+                    bttn.config(relief=tk.RAISED)
+                fmt_to_bttn[fmt].config(relief=tk.SUNKEN)
+            return bttn_action_wrapper
+
+        self.abstractFrame = tk.Label(self, text=' ' * 90, font=FONT)
+
+
+        def on_enter(fmt):
+            def on_enter_wrapper(event):
+                formatted_abstract = pprint.pformat(fmt_to_hint[fmt])
+                self.abstractFrame.configure(text=formatted_abstract)
+            return on_enter_wrapper
+
+        def on_leave(event):
+            self.abstractFrame.configure(text=" " * 90)
+
+
+        mp4 = tk.Button(gridFrame, text='.mp4', font=FONT, command=bttn_action('mp4'))
+        mp4.grid(row=1, column=0)
+        mp4.bind("<Enter>", on_enter('mp4'))
+        mp4.bind("<Leave>", on_leave)
+        fmt_to_bttn['mp4'] = mp4
+        dvd = tk.Button(gridFrame, text='.dvd', font=FONT, command=bttn_action('dvd'))
+        dvd.grid(row=1, column=1)
+        dvd.bind("<Enter>", on_enter('dvd'))
+        dvd.bind("<Leave>", on_leave)
+        fmt_to_bttn['dvd'] = dvd
+
+        iso = tk.Button(gridFrame, text='.iso', font=FONT, command=bttn_action('iso'))
+        iso.grid(row=1, column=2)
+        iso.bind("<Enter>", on_enter('iso'))
+        iso.bind("<Leave>", on_leave)
+        fmt_to_bttn['iso'] = iso
+
+
+        self.keep_mp4_var = tk.BooleanVar()
+        self.keep_mp4 = tk.Checkbutton(self, text="Also keep the downloaded mp4 file?", font=FONT, variable=self.keep_mp4_var)
+        self.keep_mp4.pack()
+
+        def submit_action():
+            self.destroy()
+            self.master.quit()
+
+        submit_button = tk.Button(self, text="SUBMIT", fg="green",
+                                       command=submit_action, font=FONT)
+        submit_button.pack(side='bottom')
+        self.abstractFrame.pack()
+
 class GUI(object):
     def __init__(self):
         self.root = tk.Tk()
         self.series = None
         self.date_selected = None
         self.pickedShows = []
+        self.fmt = None
+        self.keep_mp4 = True
 
     def __enter__(self):
+        self.saveMethod()
+        if not self.fmt:
+            print("Goodbye!")
+            sys.exit(0)
         self.seriesPicker()
         if not self.series:
             print("Goodbye!")
@@ -149,6 +234,13 @@ class GUI(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.root.destroy()
+
+    def saveMethod(self):
+        self.root.state('zoomed')
+        app = SaveMethod(self.root)
+        app.mainloop()
+        self.fmt = app.selected
+        self.keep_mp4 = app.keep_mp4_var.get()
 
     def seriesPicker(self):
         app = SeriesPicker(self.root)
