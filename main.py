@@ -8,6 +8,7 @@ from gui import GUI
 import time
 from bs4 import BeautifulSoup, Doctype
 from pprint import pprint, pformat
+import re
 
 
 import os
@@ -99,7 +100,7 @@ def _download_child(dct, download_folder):
     logger.info('downloading %s via %s', dct['name'], dct['url'])
     dir_path = os.path.dirname(os.path.realpath(__file__))
     filepath = os.path.join(dir_path, 'youtube-dl.exe')
-    download_folder = os.path.join(download_folder, '%(title)s-%(id)s.%(ext)s')
+    download_folder = os.path.join(download_folder, '{name}-%(id)s.%(ext)s'.format(name=dct['name']))
     cmd = [filepath, dct['url'], '--output', download_folder]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     while True:
@@ -176,11 +177,16 @@ def parseSeries(html):
         a = entry.find('span', attrs={'class':'subject'}).find('a')
         rres['url'] = a.get('href')
         rres['url'] = 'https://www' + rres['url'].split('www',1)[1]
-        
+        if not rres['url'].isascii():
+            logger.error('!'*80)
+            logger.error('Found a non ascii url, skipping')
+            logger.error(rres['url'])
+            logger.error('!'*80)
         if rres['url'] in tracked_urls:
             continue
         tracked_urls.append(rres['url'])
-        rres['name'] = a.text
+
+        rres['name'] = re.sub(r"[^\w\d\-_ ]", '', a.text)
         res.append(rres)
     return res
 
