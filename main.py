@@ -4,7 +4,7 @@ import subprocess
 import datetime
 import configparser
 from lib import *
-from gui import seriesPickerMain, datePicker, downloadPckerMain
+from gui import GUI
 import time
 from bs4 import BeautifulSoup, Doctype
 from pprint import pprint, pformat
@@ -50,16 +50,14 @@ def main():
         os.mkdir(download_folder)
     logger.info('Downloading all files to %s' % download_folder)
     logger.info("You can change the download location in configs.py")
-    series = seriesPickerMain()
-    if not series:
-        print("Goodbye!")
-        return
-    date_selected = datePicker()
-    if not date_selected:
-        print('Goodbye!')
-        return
-    scheduleDict = getSchedule(series, date_selected)
-    pickedNames = downloadPckerMain(scheduleDict)
+
+    with GUI() as gui:
+        series = gui.series
+        date_selected = gui.date_selected
+        scheduleDict = getSchedule(series, date_selected)
+
+        pickedNames = gui.downloadPicker(scheduleDict)
+
     if not pickedNames:
         logger.info('No shows picked, exiting...')
         return

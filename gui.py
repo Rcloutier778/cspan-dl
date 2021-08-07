@@ -1,124 +1,111 @@
 import tkinter as tk
 
 from lib import *
-from tkcalendar import Calendar, DateEntry
+from tkcalendar import Calendar
 
 import pprint
 import datetime
+import sys
 
-
+FONT = ('Arial', 20)
 
 class SeriesPicker(tk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
         self.master = master
         self.pack()
-        self.create_widgets()
-
-    def create_widgets(self):
-        self.label = tk.Label(text='Pick a series', font=('Arial',20))
+        self.label = tk.Label(self, text='Pick a series', font=FONT)
         self.label.pack(side='top')
 
         self.pathVar = tk.StringVar()
         self.path = tk.Entry(textvariable=self.pathVar)
 
         for sName in SERIES_NAME_TO_ID_DICT:
-            bttn = SeriesButton(self.master, sName, self.pathVar)
+            bttn = SeriesButton(self, sName, self.pathVar)
             bttn.pack()
-        
-        self.quit = tk.Button(self, text="QUIT", fg="red",
-                              command=self.master.destroy, font=('Arial',20))
-        self.quit.pack(side="bottom")
+
+        def quit_action():
+            self.destroy()
+            self.master.quit()
+
+        self.quit_button = tk.Button(self, text="QUIT", fg="red",
+                              command=quit_action, font=FONT)
+        self.quit_button.pack(side="bottom")
 
 class SeriesButton(tk.Button):
-    def __init__(self, master=None, seriesName=None, pathVar=None):
+    def __init__(self, master, seriesName, pathVar):
         
         self.master = master
         assert seriesName in SERIES_NAME_TO_ID_DICT
         self.seriesName = seriesName
-        assert pathVar is not None
         self.pathVar = pathVar
         fmt_name = pprint.pformat(self.seriesName, width=30)
-        super().__init__(self.master, text=fmt_name, command=self.myCommand, font=('Arial',20))
+        super().__init__(self.master, text=fmt_name, command=self.myCommand, font=FONT)
         self.pathVar = pathVar
 
     def myCommand(self):
-        self.pathVar.set( self.seriesName)
+        self.pathVar.set(self.seriesName)
         self.master.destroy()
-              
+        self.master.quit()
 
-def seriesPickerMain():
-    root=tk.Tk()
-    app = SeriesPicker(root)
-    app.mainloop()
-    returnVal = app.pathVar.get()
-    return returnVal
 
-def datePicker():
-    root = tk.Tk()
+class DatePicker(tk.Frame):
+    def __init__(self, master):
+        super().__init__(master)
+        self.pack()
+        self.master = master
 
-    pathVar = tk.StringVar()
-    path = tk.Entry(textvariable=pathVar)
-    def print_sel():
-        pathVar = cal.selection_get()
-        root.destroy()
-        
-    
+        today = datetime.date.today()
+        lastWeekend = today - datetime.timedelta(days=1 + (today.weekday() + 1) % 7)
 
-    today = datetime.date.today()
-    lastWeekend = today - datetime.timedelta(days=1+(today.weekday()+1)%7)
+        self.cal = Calendar(self,
+                       font="Arial 14", selectmode='day',
+                       cursor="hand1", year=lastWeekend.year, month=lastWeekend.month, day=lastWeekend.day)
+        self.cal.pack(fill="both", expand=True)
 
-    cal = Calendar(root,
-                   font="Arial 14", selectmode='day',
-                   cursor="hand1", year=lastWeekend.year, month=lastWeekend.month, day=lastWeekend.day)
-    cal.pack(fill="both", expand=True)
-    tk.Button(root, text="ok", command=print_sel, font=('Arial',20)).pack()
-    root.mainloop()
-    return cal.selection_get()
+        def quit_action():
+            self.destroy()
+            self.master.quit()
 
+        tk.Button(self, text="ok", command=quit_action, font=('Arial', 20)).pack()
 
 class DownloadPicker(tk.Frame):
     def __init__(self, master, resDict):
         super().__init__(master)
+        self.master = master
+        self.pack()
 
-        
-        self.pathVar = tk.StringVar()
-        self.path = tk.Entry(textvariable=self.pathVar)
-
-
-        self.gridFrame = tk.Frame(self.master)
+        self.gridFrame = tk.Frame(self)
 
         def chunks(lst, n):
             for i in range(0, len(lst), n):
                 yield lst[i:i + n]
     
-        self.abstractFrame = tk.Label(self.master, text=' '*90, font=('Arial',30))
+        self.abstractFrame = tk.Label(self, text=' '*90, font=('Arial',30))
         
-
+        self.bttns = []
         for row_idx, tr in enumerate(list(chunks(resDict,3))):
             for col_idx, td in enumerate(tr):
-                bttn = DownloadPickerButton(self.gridFrame, td['name'], td['abstract'], self.path, self.abstractFrame)
+                bttn = DownloadPickerButton(self.gridFrame, td['name'], td['abstract'], self.abstractFrame)
                 bttn.grid(row=row_idx+1, column=col_idx)
-                #bttn.pack()
-                
-        self.quit = tk.Button(self.gridFrame, text="SUBMIT", fg="green",
-                              command=self.master.destroy, font=('Arial',20))
+                self.bttns.append(bttn)
+
+        def submit_action():
+            self.destroy()
+            self.master.quit()
+
+        self.submit_button = tk.Button(self.gridFrame, text="SUBMIT", fg="green",
+                              command=submit_action, font=FONT)
         self.gridFrame.pack()
         self.abstractFrame.pack(expand=True)
-        self.quit.grid(row=0, column=1)
+        self.submit_button.grid(row=0, column=1)
 
-# Couldn't figure out how to have multiple button actions feeding into a single tikinter extractable var
-#   so globals away!
-# This is probably bad programming. Too Bad!
-SELECTED=[]
 class DownloadPickerButton(tk.Button):
-    def __init__(self, master=None, name=None, abstract=None, pathVar=None, abstractFrame=None):
+    def __init__(self, master=None, name=None, abstract=None, abstractFrame=None):
         
         self.master = master
         self.name = name
         self.abstract = abstract
-        assert pathVar is not None
-        self.pathVar = pathVar
         self.pressed = False
         self.DefClr = master.cget("bg")
         self.abstractFrame = abstractFrame
@@ -137,30 +124,60 @@ class DownloadPickerButton(tk.Button):
 
     def myCommand(self):
         self.pressed = not self.pressed
-        global SELECTED
         if self.pressed:
-            self.pathVar = self.name
-            SELECTED.append(self.name)
             self.config(bg='green', relief=tk.SUNKEN)
         else:
-            self.pathVar = ''
-            SELECTED.remove(self.name)
             self.config(bg=self.DefClr, relief=tk.RAISED)
 
+class GUI(object):
+    def __init__(self):
+        self.root = tk.Tk()
+        self.series = None
+        self.date_selected = None
+        self.pickedShows = []
 
-def downloadPckerMain(resDict):
-    root = tk.Tk()
-    root.attributes('-fullscreen', True)
-    app = DownloadPicker(root, resDict)
-    app.mainloop()
-    returnVal = app.pathVar.get()
-    global SELECTED
-    return SELECTED
+    def __enter__(self):
+        self.seriesPicker()
+        if not self.series:
+            print("Goodbye!")
+            sys.exit(0)
+        self.datePicker()
+        if not self.date_selected:
+            print('Goodbye!')
+            sys.exit(0)
+        return self
 
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.root.destroy()
 
+    def seriesPicker(self):
+        app = SeriesPicker(self.root)
+        app.mainloop()
+        self.series = app.pathVar.get()
+        return self.series
+
+    def datePicker(self):
+        cal = DatePicker(self.root)
+        cal.mainloop()
+        self.date_selected = cal.cal.selection_get()
+        return self.date_selected
+
+    def downloadPicker(self, resDict):
+        self.root.state('zoomed')
+
+        app = DownloadPicker(self.root, resDict)
+        app.mainloop()
+        self.pickedShows = [bttn.name for bttn in app.bttns if bttn.pressed]
+        if not self.pickedShows:
+            print('Goodbye!')
+            sys.exit(0)
+        return self.pickedShows
 
 
 if __name__ == '__main__':
-    seriesPickerMain()
+    with GUI() as gui:
+        print(gui.series)
+        print(gui.date_selected)
+
     print('debug only. dad should not see this bit')
 
