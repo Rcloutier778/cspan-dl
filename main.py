@@ -10,7 +10,7 @@ import tempfile
 from bs4 import BeautifulSoup, Doctype
 from pprint import pprint, pformat
 import re
-
+import shutil
 
 import os
 import sys
@@ -111,13 +111,15 @@ def dvdStyler(names, config, fmt, keep_mp4):
             logger.info('Finished %s', name)
             if not keep_mp4:
                 os.remove(path)
+            shutil.rmtree(tempFolder, ignore_errors=True)
         else:
             stdout, stderr = proc.communicate()
             logger.error('Encountered error as follows')
             logger.error('STDOUT: \n%s', stdout)
             logger.error('STDERR: \n%s', stderr)
             errors.append(name)
-
+    if not errors:
+        shutil.rmtree(mainTempFolder, ignore_errors=True)
 
 
 def downloader(res, download_folder, parallel=False):
@@ -183,7 +185,7 @@ def getSchedule(series, date):
 
     html = stripHTML(html)
     
-    res = parseSeries(html) if 'series/print' in url else parseSchedule(html)
+    res = parseSeries(html)# if 'series/print' in url else parseSchedule(html)
 
     return res
 
@@ -218,10 +220,26 @@ def parseSeries(html):
     
     for entry in html(['td']):
         rres = {}
-        rres['runtime'] = entry.find('span', attrs={'class':'runtime'}).text
-        rres['abstract'] = entry.find('span', attrs={'class':'fullAbstract'}).text
-        a = entry.find('span', attrs={'class':'subject'}).find('a')
-        rres['url'] = a.get('href')
+        subject = None
+        try:
+            # Remove empty entries
+            if not ''.join(entry.text).strip():
+                continue
+
+            # subject = series, title = schedule
+            subject = entry.find('span', attrs={'class': 'subject'}) or entry.find('span', attrs={'class': 'title'})
+            a = subject.find('a')
+            if a is None:
+                # No links
+                continue
+            # runtime = series, length = schedule
+            rres['runtime'] = (entry.find('span', attrs={'class':'runtime'}) or entry.find('span', attrs={'class':'length'})).text
+            rres['abstract'] = entry.find('span', attrs={'class':'fullAbstract'}).text
+
+            rres['url'] = a.get('href')
+        except AttributeError:
+            logger.exception('Encountered error while parsing html%s', (' for %s'%subject.text if subject else ''))
+            continue
         rres['url'] = 'https://www' + rres['url'].split('www',1)[1]
         if not rres['url'].isascii():
             logger.error('!'*80)

@@ -60,7 +60,7 @@ class DatePicker(tk.Frame):
         lastWeekend = today - datetime.timedelta(days=1 + (today.weekday() + 1) % 7)
 
         self.cal = Calendar(self,
-                       font="Arial 14", selectmode='day',
+                       font=FONT, selectmode='day',
                        cursor="hand1", year=lastWeekend.year, month=lastWeekend.month, day=lastWeekend.day)
         self.cal.pack(fill="both", expand=True)
 
@@ -82,10 +82,12 @@ class DownloadPicker(tk.Frame):
             for i in range(0, len(lst), n):
                 yield lst[i:i + n]
     
-        self.abstractFrame = tk.Label(self, text=' '*90, font=('Arial',30))
+        self.abstractFrame = tk.Label(self, text=' '*90, font=FONT)
         
         self.bttns = []
-        for row_idx, tr in enumerate(list(chunks(resDict,3))):
+        num_cols = 6
+
+        for row_idx, tr in enumerate(list(chunks(resDict, num_cols))):
             for col_idx, td in enumerate(tr):
                 bttn = DownloadPickerButton(self.gridFrame, td['name'], td['abstract'], self.abstractFrame)
                 bttn.grid(row=row_idx+1, column=col_idx)
@@ -98,8 +100,8 @@ class DownloadPicker(tk.Frame):
         self.submit_button = tk.Button(self.gridFrame, text="SUBMIT", fg="green",
                               command=submit_action, font=FONT)
         self.gridFrame.pack()
-        self.abstractFrame.pack(expand=True)
-        self.submit_button.grid(row=0, column=1)
+        self.abstractFrame.pack(expand=True, fill='x')
+        self.submit_button.grid(row=0, column=num_cols//2)
 
 class DownloadPickerButton(tk.Button):
     def __init__(self, master=None, name=None, abstract=None, abstractFrame=None):
@@ -110,13 +112,13 @@ class DownloadPickerButton(tk.Button):
         self.pressed = False
         self.DefClr = master.cget("bg")
         self.abstractFrame = abstractFrame
-        fmt_name = pprint.pformat(self.name, width=50)
+        fmt_name = pprint.pformat(self.name, width=30)
         super().__init__(self.master, text=fmt_name, command=self.myCommand, font=('Arial',15))
         self.bind("<Enter>", self.on_enter)
         self.bind("<Leave>", self.on_leave)
 
     def on_enter(self, event):
-        formatted_abstract = pprint.pformat(self.abstract)
+        formatted_abstract = pprint.pformat(self.abstract, width=120)
         self.abstractFrame.configure(text=formatted_abstract)
 
     def on_leave(self, enter):
@@ -135,7 +137,7 @@ class SaveMethod(tk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
         self.master = master
-        self.pack()
+        self.pack(fill=tk.BOTH)
         self.label = tk.Label(self, text='How would you like to save the files?', font=FONT)
         self.label.pack(side='top')
 
@@ -164,8 +166,8 @@ class SaveMethod(tk.Frame):
                 fmt_to_bttn[fmt].config(relief=tk.SUNKEN)
             return bttn_action_wrapper
 
-        self.abstractFrame = tk.Label(self, text=' ' * 90, font=FONT)
-
+        self.abstractFrame = tk.Label(self, text='', font=FONT)
+        self.abstractFrame.pack()
 
         def on_enter(fmt):
             def on_enter_wrapper(event):
@@ -174,7 +176,7 @@ class SaveMethod(tk.Frame):
             return on_enter_wrapper
 
         def on_leave(event):
-            self.abstractFrame.configure(text=" " * 90)
+            self.abstractFrame.configure(text='')
 
 
         mp4 = tk.Button(gridFrame, text='.mp4', font=FONT, command=bttn_action('mp4'))
@@ -182,6 +184,7 @@ class SaveMethod(tk.Frame):
         mp4.bind("<Enter>", on_enter('mp4'))
         mp4.bind("<Leave>", on_leave)
         fmt_to_bttn['mp4'] = mp4
+
         dvd = tk.Button(gridFrame, text='.dvd', font=FONT, command=bttn_action('dvd'))
         dvd.grid(row=1, column=1)
         dvd.bind("<Enter>", on_enter('dvd'))
@@ -206,7 +209,7 @@ class SaveMethod(tk.Frame):
         submit_button = tk.Button(self, text="SUBMIT", fg="green",
                                        command=submit_action, font=FONT)
         submit_button.pack(side='bottom')
-        self.abstractFrame.pack()
+
 
 class GUI(object):
     def __init__(self):
