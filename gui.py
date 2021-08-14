@@ -300,7 +300,16 @@ class GUI(object):
     def datePicker(self):
         cal = DatePicker(self.root)
         cal.mainloop()
-        self.date_selected = cal.cal.selection_get()
+        selected_date = cal.cal.selection_get()
+        
+        # CSPAN calendar shows sat, sun, mon, but resolves to it for sun-sat, skipping
+        #   to the next week
+        
+        if selected_date.weekday() in [6,0]:
+            selected_date -= datetime.timedelta(days=1 if selected_date.weekday() else 2)
+        
+        
+        self.date_selected = selected_date
         return self.date_selected
     
     def downloadPicker(self, resDict):
