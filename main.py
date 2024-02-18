@@ -15,7 +15,9 @@ import shutil
 import os
 import sys
 import logging
+import logging.handlers
 
+HOMEDIR = os.path.dirname(os.path.abspath(__file__))
 
 logging.basicConfig(
      filename='log.log',
@@ -34,13 +36,20 @@ console.setFormatter(formatter)
 logging.getLogger('').addHandler(console)
 
 logger = logging.getLogger(__name__)
+logpath = os.path.join(HOMEDIR, 'log.log')
+fh = logging.handlers.RotatingFileHandler(logpath, maxBytes=1024*1024*5, mode='a', backupCount=1, delay=0)
+fh.setLevel(logging.INFO)
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 
 # Need youtube-dl.exe in the same dir as this
 # Need ffmpeg installed in C:\ffmpeg
 # Need C:\ffmpeg\bin in PATH
 
+CONFIG = None
 def main():
+    global CONFIG
     config = configparser.ConfigParser()
     config.read('config.cfg')
     download_folder = config['DEFAULT']['DownloadFolder']
@@ -52,7 +61,7 @@ def main():
         os.mkdir(download_folder)
     logger.info('Downloading all files to %s' % download_folder)
     logger.info("You can change the download location in configs.py")
-
+    CONFIG = config['DEFAULT']
 
     with GUI() as gui:
         series = gui.series
@@ -81,13 +90,13 @@ def main():
             raise RuntimeError('Encountered partial errors while running. Please consult the logs.')
         return
 
-    dvdStyler(pickedNames, config, save_fmt, keep_mp4)
+    dvdStyler(pickedNames, save_fmt, keep_mp4)
 
-def dvdStyler(names, config, fmt, keep_mp4):
+def dvdStyler(names, fmt, keep_mp4):
     assert fmt in ['dvd','iso']
     logger.info('Converting %s files to %s', len(names), fmt)
-    download_folder = config['DEFAULT']['DownloadFolder']
-    dvd_styler_exe = config['DEFAULT']['DVDStyler']
+    download_folder = CONFIG['DownloadFolder']
+    dvd_styler_exe = CONFIG['DVDStyler']
 
     paths = [os.path.join(download_folder, f) for f in os.listdir(download_folder) if f.rsplit('.',1)[0] in names]
 
@@ -166,6 +175,28 @@ def _download_child(dct, download_folder):
                 print(line)
     if not proc.returncode:
         logger.info('Finished %s', dct['name'])
+        # As of 2022-08-06, the audio we get from C-SPAN is clipping / way too loud
+        #   Normalize the volume.
+##        
+##        loudnorm_cmd = ["ffmpeg",
+##                        "-i",
+##                        os.path.join(download_folder, dct['name']),
+##                        "-filter:a", "loudnorm",
+##                        "-y",
+##                        os.path.join(download_folder, dct['name'])]
+##        loudnorm_proc = subprocess.Popen(loudnorm_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+##        while True:
+##            if loudnorm_proc.poll() or loudnorm_proc.returncode is not None:
+##                break
+##            line = loudnorm_proc.stdout.readline()
+##            if not line:
+##                time.sleep(3)
+##        if not loudnorm_proc.returncode:
+##            stdout, stderr = loudnorm_proc.communicate()
+##            logger.error('Encountered error as follows')
+##            logger.error('STDOUT: \n%s', stdout)
+##            logger.error('STDERR: \n%s', stderr)
+##            return dct['name'], stderr
     else:
         stdout, stderr = proc.communicate()
         logger.error('Encountered error as follows')
@@ -179,8 +210,12 @@ def getSchedule(series, date):
     date = date.strftime('%Y-%m-%d')
     url = getURL(series, date=date)
     logger.info('Using %s to grab the schedule for %s on %s' % (url, series, date,))
-    r = requests.get(url)
-    assert r.status_code == 200
+    headers = {
+        'User-Agent' : CONFIG['UserAgent']
+    }
+    r = requests.get(url, headers = headers)
+    additionalStatusCodeText = '\nTry updating the user agent in config.cfg' if r.status_code == 403 else ''
+    assert r.status_code == 200, 'Status code of %d is not 200.%s' % (r.status_code, additionalStatusCodeText,)
     html = BeautifulSoup(r.text, "html.parser")
 
     html = stripHTML(html)
@@ -217,6 +252,7 @@ def parseSeries(html):
 
     res = []
     tracked_urls = []
+    tracked_names = []
     
     for entry in html(['td']):
         rres = {}
@@ -246,11 +282,15 @@ def parseSeries(html):
             logger.error('Found a non ascii url, skipping')
             logger.error(rres['url'])
             logger.error('!'*80)
-        if rres['url'] in tracked_urls:
-            continue
-        tracked_urls.append(rres['url'])
-
+            
         rres['name'] = re.sub(r"[^\w\d\-_ ]", '', a.text)
+
+        if rres['url'] in tracked_urls and rres['name'] in tracked_names:
+            continue
+
+        tracked_urls.append(rres['url'])
+        tracked_names.append(rres['name'])
+        
         res.append(rres)
     return res
 
