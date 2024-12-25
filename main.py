@@ -155,6 +155,12 @@ def downloader(res, download_folder, parallel=False):
         
 def _download_child(dct, download_folder):
     logger.info('downloading %s via %s', dct['name'], dct['url'])
+
+    r = requests.get(dct['url'], headers={'User-Agent':CONFIG['UserAgent']}, timeout=15)
+    if r.status_code == 200 and r.url != dct['url']:
+        logger.info('Detected redirect from %s to %s', dct['url'], r.url)
+        dct['url'] = r.url
+
     dir_path = os.path.dirname(os.path.realpath(__file__))
     filepath = os.path.join(dir_path, 'youtube-dl.exe')
     download_folder = os.path.join(download_folder, '{name}.%(ext)s'.format(name=dct['name']))
