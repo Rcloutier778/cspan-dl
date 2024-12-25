@@ -154,8 +154,13 @@ def downloader(res, download_folder, parallel=False):
     return len(download_errors)
         
 def _download_child(dct, download_folder):
+    global CONFIG
     logger.info('downloading %s via %s', dct['name'], dct['url'])
-
+    if CONFIG is None:
+        CONFIG = configparser.ConfigParser()
+        CONFIG.read('config.cfg')
+        CONFIG = CONFIG['DEFAULT']
+        
     r = requests.get(dct['url'], headers={'User-Agent':CONFIG['UserAgent']}, timeout=15)
     if r.status_code == 200 and r.url != dct['url']:
         logger.info('Detected redirect from %s to %s', dct['url'], r.url)
